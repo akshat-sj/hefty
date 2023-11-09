@@ -3,6 +3,7 @@
 #include <time.h>
 #define NUM_TASKS 5
 #define NUM_SYSTEMS 3
+// user defined struct for tasks
 struct task
 {
     int id;
@@ -20,7 +21,7 @@ struct taskgraph
     int** dependencies;
     struct task* tasks;
 };
-
+// making our task graph
 struct taskgraph createtaskgraph(){
     struct taskgraph graph;
     graph.num_tasks = NUM_TASKS;
@@ -31,9 +32,14 @@ struct taskgraph createtaskgraph(){
         graph.tasks[i].runtime=(rand()%10)+1;
         graph.dependencies[i] = calloc(NUM_TASKS,sizeof(int));
     }
-    graph.dependencies[0][1] = 1;
-    graph.dependencies[1][2] = 1;
-    graph.dependencies[0][3] = 1;
-    graph.dependencies[3][4] = 1;
+    graph.dependencies[0][1]=1;
+    graph.dependencies[1][2]=1;
+    graph.dependencies[0][3]=1;
+    graph.dependencies[3][4]=1;
+    return graph;
 };
+void calculaterank(struct task){
+    
+}
+
 
