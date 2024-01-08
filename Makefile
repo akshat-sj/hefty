@@ -6,7 +6,7 @@ TARGET = main.exe
 all: $(TARGET)
 
 $(TARGET): main.c
-    $(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
-    rm -f $(TARGET)
+	rm -f $(TARGET)

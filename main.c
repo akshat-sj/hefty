@@ -12,10 +12,11 @@ typedef struct task{
 	int* comm_cost; //graph of communication cost dependencies
 	int* parent;
 }task;
+//function to generate task graph in dot format
 void generatetaskgraph(task *tasks, int num_tasks) {
     FILE *dotFile = fopen("task_graph.dot", "w");
     fprintf(dotFile, "digraph TaskGraph {\n");
-    
+    // Create nodes for each task
     for (int i = 0; i < num_tasks; i++) {
         for (int j = 0; j < num_tasks; j++) {
             if (tasks[i].comm_cost[j] != 0) {
@@ -43,6 +44,7 @@ int cmp_id(const void *a, const void *b) {
 int find_min_index(int arr[],int n) {
 	int temp = arr[0];
 	int index = 0;
+	// Find the minimum value in the array
 	for(int i = 0; i < n; i++) {
 		if(temp > arr[i]) {
 			temp = arr[i];
@@ -51,19 +53,17 @@ int find_min_index(int arr[],int n) {
 	}
 	return index;
 }
-
+// Find the minimum value in the array
 int find_min(int arr[],int n) {
 	int temp = arr[0];
-	int index = 0;
 	for(int i = 0; i < n; i++) {
 		if(temp > arr[i]) {
 			temp = arr[i];
-			index = i;
 		}
 	}
 	return temp;
 }
-
+// Find the index of the task with the given id
 int find_id(task arr[], int n,int id) {
 	int index = 0;
 	for(int i = 0; i < n; i++) {
@@ -73,6 +73,7 @@ int find_id(task arr[], int n,int id) {
 	}
 	return index;
 }
+// Initialize all the variables
 void inittasks(task* tasks, int num_tasks, int num_procs) {
 	for (int i = 0; i < num_tasks; i++) {
 		tasks[i].id = i + 1;
@@ -83,6 +84,7 @@ void inittasks(task* tasks, int num_tasks, int num_procs) {
 		tasks[i].parent = (int*)malloc(num_tasks * sizeof(int));
 	}
 }
+// Setup the parent array
 void setuppred(task* tasks, int num_tasks) {
 	for (int i = 0; i < num_tasks; i++) {
 		for (int j = 0; j < num_tasks; j++) {
@@ -96,6 +98,7 @@ void setuppred(task* tasks, int num_tasks) {
 		}
 	}
 }
+// Calculate rank
 void calculaterank(task* tasks, int num_tasks, int num_procs) {
 	for (int i = 0; i < num_tasks; i++) {
 		tasks[i].rank = 0;
@@ -184,6 +187,10 @@ int calcmakespan(task* tasks, int num_tasks, int num_procs) {
 void generatetimeline(task *tasks, int num_tasks, int num_procs) {
     FILE *dotFile = fopen("timeline_graph.dot", "w");
     fprintf(dotFile, "digraph TimelineGraph {\n");
+    fprintf(dotFile, "  rankdir=TB;\n"); // Make the graph vertical
+    fprintf(dotFile, "  nodesep=1.0;\n"); // Increase the distance between nodes of the same rank
+    fprintf(dotFile, "  ranksep=2.0;\n"); // Increase the distance between ranks
+
     // Create subgraphs for each processor
     for (int i = 0; i < num_procs; i++) {
         fprintf(dotFile, "  subgraph cluster_proc%d {\n", i);
@@ -197,22 +204,27 @@ void generatetimeline(task *tasks, int num_tasks, int num_procs) {
 
         fprintf(dotFile, "  }\n");
     }
+
+    // Add invisible edges to force a vertical layout
+    for (int i = 0; i < num_procs - 1; i++) {
+        fprintf(dotFile, "  Task%d_p%d -> Task%d_p%d [style=invis];\n", tasks[0].id, i + 1, tasks[0].id, i + 2);
+    }
+
     // Connect nodes based on task dependencies
     for (int i = 0; i < num_tasks; i++) {
         for (int j = 0; j < num_tasks; j++) {
             if (tasks[i].comm_cost[j] != 0) {
                 fprintf(dotFile, "  Task%d_p%d -> Task%d_p%d [label=\"%d\"];\n",
-                        tasks[i].id, find_min_index(tasks[i].EFT, num_procs) + 1,
-                        tasks[j].id, find_min_index(tasks[j].EST, num_procs) + 1,
-                        tasks[i].comm_cost[j]);
+                        tasks[i].id, i + 1, tasks[j].id, j + 1, tasks[i].comm_cost[j]);
             }
         }
     }
+
     fprintf(dotFile, "}\n");
     fclose(dotFile);
 }
 int main() {
-	 LARGE_INTEGER frequency, start, end;
+	LARGE_INTEGER frequency, start, end;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start);
 	FILE *input;
