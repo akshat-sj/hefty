@@ -1,98 +1,301 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#define NUM_TASKS 5
-#define NUM_SYSTEMS 3
-// user defined struct for tasks
-struct task
-{
-    int id;
-    int runtime;
-    int rank;
-};
-//user defined struct for systems
-struct system
-{
-    int id;
-    int current_time;
-};
-//user defined taskgraph which is basically a directed acyclic graph
-struct taskgraph
-{
-    int num_tasks;
-    int** comm_cost;
-    int** dependencies;
-    struct task* tasks;
-};
-// making our task graph
-struct taskgraph createtaskgraph(){
-    struct taskgraph graph;
-    graph.num_tasks = NUM_TASKS;
-    graph.dependencies = malloc(NUM_TASKS*sizeof(int*));
-    graph.tasks = malloc(NUM_TASKS*sizeof(struct task));
-    graph.comm_cost =  malloc(NUM_TASKS*sizeof(int*));
-    // we now randomly assign runtimes to each of the tasks between 1 and 10
-    for(int i=0;i<NUM_TASKS;i++){
-        graph.tasks[i].id=i;
-        graph.tasks[i].runtime=(rand()%10)+1;
-        graph.dependencies[i] = calloc(NUM_TASKS,sizeof(int));
-        graph.comm_cost[i] = malloc(NUM_TASKS*sizeof(int));
-        for(int j=0;j<NUM_TASKS;j++){
-            graph.comm_cost[i][j] = (rand()%5)+1;
-        }
-    }
-    // these are dependencies of the graph and the task scheduler essentially signifying which task will be executed when
-    graph.dependencies[0][1]=1;
-    graph.dependencies[1][2]=1;
-    graph.dependencies[0][3]=1;
-    graph.dependencies[3][4]=1;
-    return graph;
-};
-void calculaterank(struct taskgraph *tg){
-    for(int i=0;i<tg->num_tasks;i++){
-        tg->tasks[i].rank=tg->tasks[i].runtime;
-        for(int j=0;j<tg->num_tasks;j++){
-            int rk_ck =tg->tasks[j].rank + tg->tasks[j].runtime + tg->comm_cost[i][j];
-            if(tg->dependencies[i][j]>0 && tg->tasks[i].rank<rk_ck){
-                tg->tasks[i].rank = rk_ck;
+#include<stdio.h>
+#include<stdlib.h>
+#include <windows.h>
+#include <psapi.h>
+// here we initially declare our data structure task
+typedef struct task{
+	int* comp_cost;
+	double rank;
+	int id;
+	int* EST;
+	int* EFT;
+	int* comm_cost; //graph of communication cost dependencies
+	int* parent;
+}task;
+void generatetaskgraph(task *tasks, int num_tasks) {
+    FILE *dotFile = fopen("task_graph.dot", "w");
+    fprintf(dotFile, "digraph TaskGraph {\n");
+    
+    for (int i = 0; i < num_tasks; i++) {
+        for (int j = 0; j < num_tasks; j++) {
+            if (tasks[i].comm_cost[j] != 0) {
+                fprintf(dotFile, "  %d -> %d [label=\"%d\"]\n", tasks[i].id, tasks[j].id, tasks[i].comm_cost[j]);
             }
         }
     }
-  
+
+    fprintf(dotFile, "}\n");
+
+    fclose(dotFile);
 }
-void heftscheduler(struct taskgraph* graph, struct system systems[NUM_SYSTEMS]) {
-    calculaterank(graph);
-    for (int i = 0; i < graph->num_tasks; i++) {
-        int min_time = -1;
-        int min_proc = -1;
-        for (int j = 0; j < NUM_SYSTEMS; j++) {
-            int start_time = systems[j].current_time;
-            int finish_time = start_time + graph->tasks[i].runtime;
-            if (min_time == -1 || finish_time < min_time) {
-                min_time = finish_time;
-                min_proc = j;
+//custom comparator used for sorting with qsort
+int cmp_rank(const void *a, const void *b) {
+		task* t1 = (task*)a;
+		task* t2 = (task*)b;
+		return (t2->rank) - (t1->rank);
+}
+int cmp_id(const void *a, const void *b) {
+		task* t1 = (task*)a;
+		task* t2 = (task*)b;
+		return (t1->id) - (t2->id);
+}
+
+int find_min_index(int arr[],int n) {
+	int temp = arr[0];
+	int index = 0;
+	for(int i = 0; i < n; i++) {
+		if(temp > arr[i]) {
+			temp = arr[i];
+			index = i;
+		}
+	}
+	return index;
+}
+
+int find_min(int arr[],int n) {
+	int temp = arr[0];
+	int index = 0;
+	for(int i = 0; i < n; i++) {
+		if(temp > arr[i]) {
+			temp = arr[i];
+			index = i;
+		}
+	}
+	return temp;
+}
+
+int find_id(task arr[], int n,int id) {
+	int index = 0;
+	for(int i = 0; i < n; i++) {
+		if(arr[i].id == id) {
+			index = i;
+		} 
+	}
+	return index;
+}
+void inittasks(task* tasks, int num_tasks, int num_procs) {
+	for (int i = 0; i < num_tasks; i++) {
+		tasks[i].id = i + 1;
+		tasks[i].comp_cost = (int*)malloc(num_procs * sizeof(int));
+		tasks[i].EST = (int*)malloc(num_procs * sizeof(int));
+		tasks[i].EFT = (int*)malloc(num_procs * sizeof(int));
+		tasks[i].comm_cost = (int*)malloc(num_tasks * sizeof(int));
+		tasks[i].parent = (int*)malloc(num_tasks * sizeof(int));
+	}
+}
+void setuppred(task* tasks, int num_tasks) {
+	for (int i = 0; i < num_tasks; i++) {
+		for (int j = 0; j < num_tasks; j++) {
+			if (tasks[i].comm_cost[j] != 0) {
+				tasks[j].parent[i] = tasks[i].id;
+			}
+			else {
+				tasks[j].parent[i] = -1;
+			}
+
+		}
+	}
+}
+void calculaterank(task* tasks, int num_tasks, int num_procs) {
+	for (int i = 0; i < num_tasks; i++) {
+		tasks[i].rank = 0;
+
+		for (int j = 0; j < num_procs; j++) {
+			tasks[i].rank += tasks[i].comp_cost[j];
+		}
+
+		tasks[i].rank /= num_procs;
+	}
+	double temp, temp2 = 0;
+    
+    // add max of sum of previous ranks and communication cost
+    for(int i = num_tasks-2 ; i >= 0; i--) {
+
+    	for(int j = num_tasks-1 ; j >= 0; j--) {
+    	
+    		if(tasks[i].comm_cost[j] != 0) {
+    		temp = tasks[i].rank + tasks[j].rank + tasks[i].comm_cost[j];
+    			if(temp2 < temp) {
+    				temp2 = temp;
+				}
+			}
+    	}
+    	tasks[i].rank = temp2;
+    	temp2 = 0;
+    }
+}
+void calculateESTEFT(task* tasks, int num_tasks, int num_procs, int* proc, int* pred_proc, int pred[][num_tasks]) {
+	int min = find_min_index(tasks[0].EFT, num_procs);
+	pred_proc[0] = min;
+	int time = tasks[0].EFT[min];
+	proc[min] = time;
+	int max = 0;
+	int temp_max = 0;
+	int p;
+	int id = 0;
+
+	// Loop to find EFT and EST
+	for (int i = 1; i < num_tasks; i++) {
+		for (int j = 0; j < num_procs; j++) {
+			for (int k = 0; k < num_tasks; k++) {
+				// Find the parent of the task
+				p = tasks[i].parent[k];
+				// Find the index of the parent task
+				id = find_id(tasks, num_tasks, p);
+				if (p > 0) {
+					// Find the processor on which the parent task is executed
+					if (pred_proc[id] == j) {
+						temp_max = proc[j];
+					}
+					else {
+						// Find the max of the EFT of the parent task and the communication cost
+						temp_max = find_min(tasks[id].EFT, num_procs) + pred[p - 1][tasks[i].id - 1];
+					}
+					if (temp_max > max) {
+						// Find the max of the EFT of all the parent tasks
+						max = temp_max;
+						if (proc[j] > max) {
+							max = proc[j];
+						}
+					}
+				}
+			}
+			tasks[i].EST[j] = max;
+			tasks[i].EFT[j] = tasks[i].EST[j] + tasks[i].comp_cost[j];
+			max = 0;
+		}
+		min = find_min_index(tasks[i].EFT, num_procs);
+		pred_proc[i] = min;
+		proc[min] = tasks[i].EFT[min];
+	}
+	//// Loop ends
+}
+int calcmakespan(task* tasks, int num_tasks, int num_procs) {
+	int makespan = 0;
+	for (int i = 0; i < num_tasks; i++) {
+		for (int j = 0; j < num_procs; j++) {
+			if (makespan < tasks[i].EFT[j]) {
+				makespan = tasks[i].EFT[j];
+			}
+		}
+	}
+	return makespan;
+}
+void generatetimeline(task *tasks, int num_tasks, int num_procs) {
+    FILE *dotFile = fopen("timeline_graph.dot", "w");
+    fprintf(dotFile, "digraph TimelineGraph {\n");
+    // Create subgraphs for each processor
+    for (int i = 0; i < num_procs; i++) {
+        fprintf(dotFile, "  subgraph cluster_proc%d {\n", i);
+        fprintf(dotFile, "    label=\"Processor %d\";\n", i + 1);
+
+        // Nodes for each task on the processor
+        for (int j = 0; j < num_tasks; j++) {
+            fprintf(dotFile, "    Task%d_p%d [label=\"Task %d\\nEST: %d EFT: %d\"];\n",
+                    tasks[j].id, i + 1, tasks[j].id, tasks[j].EST[i], tasks[j].EFT[i]);
+        }
+
+        fprintf(dotFile, "  }\n");
+    }
+    // Connect nodes based on task dependencies
+    for (int i = 0; i < num_tasks; i++) {
+        for (int j = 0; j < num_tasks; j++) {
+            if (tasks[i].comm_cost[j] != 0) {
+                fprintf(dotFile, "  Task%d_p%d -> Task%d_p%d [label=\"%d\"];\n",
+                        tasks[i].id, find_min_index(tasks[i].EFT, num_procs) + 1,
+                        tasks[j].id, find_min_index(tasks[j].EST, num_procs) + 1,
+                        tasks[i].comm_cost[j]);
             }
         }
-        systems[min_proc].current_time = min_time;
-        printf("Task %d scheduled on System %d\n", graph->tasks[i].id, systems[min_proc].id);
-    }   
+    }
+    fprintf(dotFile, "}\n");
+    fclose(dotFile);
 }
 int main() {
-    srand(time(NULL));
-    struct taskgraph graph = createtaskgraph();
-    struct system systems[NUM_SYSTEMS];
-    for (int i = 0; i < NUM_SYSTEMS; i++) {
-        systems[i].id = i;
-        systems[i].current_time = 0;
+	 LARGE_INTEGER frequency, start, end;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&start);
+	FILE *input;
+	int num_tasks;
+	int num_procs;
+    input = fopen("input.txt","r");
+    
+    // Taking input
+    fscanf(input,"%d",&num_tasks);
+    fscanf(input,"%d",&num_procs);
+    
+    int proc[num_procs];
+    int pred[num_tasks][num_tasks];
+    int pred_proc[num_tasks];
+    
+    task* tasks;
+    
+    // Allocate memory to all variables
+    tasks = (task*)malloc(num_tasks*sizeof(task));
+    inittasks(tasks,num_tasks,num_procs);
+    // Taking computation cost input
+    for(int i = 0; i < num_procs; i++) {
+    	for(int j = 0; j < num_tasks; j++) {
+    		fscanf(input,"%d ",&tasks[j].comp_cost[i]);
+    	}
+
     }
-    printf("Task Scheduling:\n");
-    heftscheduler(&graph, systems);
-    for (int i = 0; i < NUM_TASKS; i++) {
-        free(graph.dependencies[i]);
+    // Taking communication cost input
+    for(int i = 0; i < num_tasks; i++) {
+    	
+    	for(int j = 0; j < num_tasks; j++) {
+    		fscanf(input,"%d",&tasks[i].comm_cost[j]);
+    		pred[i][j] = tasks[i].comm_cost[j];
+    	}
     }
-    free(graph.dependencies);
-    free(graph.tasks);
-    return 0;
+    
+    setuppred(tasks,num_tasks);
+    // Inititalize processors
+    for(int i = 0; i < num_procs; i++) {
+    	proc[i] = 0;
+    }
+    // Calculate rank
+	calculaterank(tasks,num_tasks,num_procs);
+	// Sort tasks based on rank
+    for(int i = 0; i < num_tasks; i++) {
+    	printf("Task %d: %lf\n",tasks[i].id,tasks[i].rank);
+    }
+    printf("\n");
+	qsort(tasks, num_tasks, sizeof(task), cmp_rank);
+    // Print tasks in order of execution
+    printf("\nThe order of the tasks to be scheduled:\n");
+    for(int i = 0; i < num_tasks; i++) {
+    	printf("%d ",tasks[i].id);
+    }
+    printf("\n\n");
+    // Finding EST and EFT for entry task
+    for(int i = 0; i < num_procs; i++) {
+    	tasks[0].EST[i] = 0;
+    	tasks[0].EFT[i] = tasks[0].EST[i] + tasks[0].comp_cost[i];
+    }
+    
+    // Calculate EST and EFT for all tasks
+    calculateESTEFT(tasks,num_tasks,num_procs,proc,pred_proc,pred);
+    qsort(tasks, num_tasks, sizeof(task), cmp_id);
+    FILE *output;
+	output = fopen("output.txt","w");
+    for(int i = 0; i < num_tasks; i++) {
+    	int ind = find_min_index(tasks[i].EFT,num_procs);
+    	printf("Task %d is executed on processor %d from time %d to %d\n",tasks[i].id,ind+1,tasks[i].EST[ind],tasks[i].EFT[ind]);
+		fprintf(output,"%d %d\n",tasks[i].id,ind+1);
+    }
+    generatetaskgraph(tasks, num_tasks);
+	generatetimeline(tasks, num_tasks, num_procs); 
+    fclose(input);
+	 QueryPerformanceCounter(&end);
+    double interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+    printf("Time taken: %f seconds\n", interval);
+
+    // Get the memory usage of the current process
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc));
+    SIZE_T virtualMemUsedByMe = pmc.PrivateUsage;
+    printf("Memory used: %llu bytes\n", virtualMemUsedByMe);
+
+	return 0;
 }
-
-

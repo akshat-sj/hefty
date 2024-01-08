@@ -1,0 +1,17 @@
+digraph TaskGraph {
+  1 -> 2 [label="18"]
+  1 -> 3 [label="12"]
+  1 -> 4 [label="9"]
+  1 -> 5 [label="11"]
+  1 -> 6 [label="14"]
+  2 -> 8 [label="19"]
+  2 -> 9 [label="16"]
+  3 -> 7 [label="23"]
+  4 -> 8 [label="27"]
+  4 -> 9 [label="23"]
+  5 -> 9 [label="13"]
+  6 -> 8 [label="15"]
+  7 -> 10 [label="17"]
+  8 -> 10 [label="11"]
+  9 -> 10 [label="13"]
+}

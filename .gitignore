@@ -1,2 +1,7 @@
 /.vscode
+a.exe
 main.exe
+input.txt
+output.txt
+task_graph.dot
+timeline_graph.dot
