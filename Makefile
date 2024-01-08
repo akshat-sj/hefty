@@ -5,7 +5,7 @@ TARGET = main.exe
 
 all: $(TARGET)
 
-$(TARGET): main.c
+$(TARGET): src/main.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
