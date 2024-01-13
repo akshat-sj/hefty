@@ -223,14 +223,25 @@ void generatetimeline(task *tasks, int num_tasks, int num_procs) {
     fprintf(dotFile, "}\n");
     fclose(dotFile);
 }
-int main() {
+int main(int argc, char *argv[]) {
 	LARGE_INTEGER frequency, start, end;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start);
 	FILE *input;
 	int num_tasks;
 	int num_procs;
-    input = fopen("input.txt","r");
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
+
+    // Open the input file
+    input = fopen(argv[1], "r");
+    if (input == NULL) {
+        fprintf(stderr, "Error opening file: %s\n", argv[1]);
+        return 1;
+    }
+
     
     // Taking input
     fscanf(input,"%d",&num_tasks);
