@@ -280,6 +280,7 @@ int main(int argc, char *argv[]) {
     // Calculate rank
 	calculaterank(tasks,num_tasks,num_procs);
 	// Sort tasks based on rank
+	printf("The upward rank of the tasks:\n");
     for(int i = 0; i < num_tasks; i++) {
     	printf("Task %d: %lf\n",tasks[i].id,tasks[i].rank);
     }
@@ -291,6 +292,7 @@ int main(int argc, char *argv[]) {
     	printf("%d ",tasks[i].id);
     }
     printf("\n\n");
+	printf("The makespan of the schedule is: %d\n",calcmakespan(tasks,num_tasks,num_procs));
     // Finding EST and EFT for entry task
     for(int i = 0; i < num_procs; i++) {
     	tasks[0].EST[i] = 0;
@@ -302,18 +304,20 @@ int main(int argc, char *argv[]) {
     qsort(tasks, num_tasks, sizeof(task), cmp_id);
     FILE *output;
 	output = fopen("output.txt","w");
+	printf("The order of the tasks to be scheduled:\n");
     for(int i = 0; i < num_tasks; i++) {
     	int ind = find_min_index(tasks[i].EFT,num_procs);
     	printf("Task %d is executed on processor %d from time %d to %d\n",tasks[i].id,ind+1,tasks[i].EST[ind],tasks[i].EFT[ind]);
 		fprintf(output,"%d %d\n",tasks[i].id,ind+1);
     }
+	printf("\n");
     generatetaskgraph(tasks, num_tasks);
 	generatetimeline(tasks, num_tasks, num_procs); 
     fclose(input);
 	 QueryPerformanceCounter(&end);
     double interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
     printf("Time taken: %f seconds\n", interval);
-
+	printf("\n");
     // Get the memory usage of the current process
     PROCESS_MEMORY_COUNTERS_EX pmc;
     GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc));
